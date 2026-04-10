@@ -7,32 +7,35 @@
 <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
-  body{background:#080b14;color:#e2e8f6;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:16px;gap:14px}
-  .cam-wrap{position:relative;width:100%;max-width:380px;aspect-ratio:4/3;background:#000;border-radius:14px;overflow:hidden;border:1px solid #ffffff18}
+  body{background:#080b14;color:#e2e8f6;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:16px;gap:12px}
+  .cam-wrap{position:relative;width:100%;max-width:420px;aspect-ratio:4/3;background:#000;border-radius:14px;overflow:hidden;border:1px solid #ffffff18}
   video{width:100%;height:100%;object-fit:cover;display:block}
   .ring{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
   .ring div{width:55%;aspect-ratio:1;border-radius:50%;border:2px solid rgba(59,130,246,.6);animation:rp 2.5s infinite}
   @keyframes rp{0%,100%{border-color:rgba(59,130,246,.5)}50%{border-color:rgba(6,182,212,.8)}}
   .msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(8,11,20,.8);font-size:13px;color:#64748b;flex-direction:column;gap:8px}
-  .btns{display:flex;gap:10px;width:100%;max-width:380px}
-  button{flex:1;padding:12px;border-radius:10px;border:none;font-size:14px;font-weight:600;cursor:pointer}
+  .btns{display:flex;gap:10px;width:100%;max-width:420px}
+  button{flex:1;padding:12px;border-radius:10px;border:none;font-size:14px;font-weight:600;cursor:pointer;transition:opacity .2s}
+  button:active{opacity:.7}
   .b1{background:#1a2236;color:#e2e8f6;border:1px solid #ffffff18}
-  .b2{background:rgba(59,130,246,.12);color:#3b82f6;border:1px solid rgba(59,130,246,.3)}
+  .b2{background:rgba(59,130,246,.2);color:#3b82f6;border:1px solid rgba(59,130,246,.4)}
   .b2:disabled{opacity:.35;cursor:not-allowed}
-  #status{font-size:12px;color:#64748b;text-align:center;max-width:380px}
-  .result{width:100%;max-width:380px;background:#111827;border:1px solid #ffffff18;border-radius:14px;padding:16px;display:none}
-  .result.ok{border-color:rgba(16,185,129,.4)}
-  .result.fail{border-color:rgba(239,68,68,.4)}
-  .rname{font-size:17px;font-weight:700;margin-bottom:3px}
+  #status{font-size:12px;color:#64748b;text-align:center;max-width:420px;min-height:18px}
+  .result{width:100%;max-width:420px;background:#111827;border:1px solid #ffffff18;border-radius:14px;padding:16px;display:none}
+  .result.ok{border-color:rgba(16,185,129,.5);background:rgba(16,185,129,.05)}
+  .result.fail{border-color:rgba(239,68,68,.5);background:rgba(239,68,68,.05)}
+  .rname{font-size:18px;font-weight:700;margin-bottom:3px}
   .rsub{font-size:12px;color:#64748b;margin-bottom:14px}
   .rbtns{display:flex;gap:10px}
-  .bin{flex:1;padding:12px;border-radius:10px;border:1px solid rgba(16,185,129,.25);background:rgba(16,185,129,.12);color:#10b981;font-weight:700;cursor:pointer;font-size:14px}
-  .bout{flex:1;padding:12px;border-radius:10px;border:1px solid rgba(59,130,246,.25);background:rgba(59,130,246,.12);color:#3b82f6;font-weight:700;cursor:pointer;font-size:14px}
+  .bin{flex:1;padding:14px;border-radius:10px;border:1px solid rgba(16,185,129,.3);background:rgba(16,185,129,.15);color:#10b981;font-weight:700;cursor:pointer;font-size:15px}
+  .bout{flex:1;padding:14px;border-radius:10px;border:1px solid rgba(59,130,246,.3);background:rgba(59,130,246,.15);color:#3b82f6;font-weight:700;cursor:pointer;font-size:15px}
   .rfail{font-size:13px;color:#ef4444;text-align:center;padding:8px}
+  .loader{display:inline-block;width:14px;height:14px;border:2px solid #ffffff30;border-top-color:#3b82f6;border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:6px}
+  @keyframes spin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
-<div id="status">⏳ Loading face models...</div>
+<div id="status">⏳ Loading models...</div>
 <div class="cam-wrap">
   <video id="vid" autoplay muted playsinline></video>
   <div class="ring"><div></div></div>
@@ -57,31 +60,54 @@ if(MODE==='register'){
   document.getElementById('btnV').textContent='📸 Capture Face';
 }
 
+// Receive employees from parent/opener
+function receiveEmployees(data){
+  employees=data.employees||[];
+  ORIGIN=data.origin||'*';
+  document.getElementById('status').textContent='✅ '+employees.length+' employees loaded.';
+}
+
 window.addEventListener('message',function(e){
-  if(e.data&&e.data.type==='LOAD_EMPLOYEES'){
-    employees=e.data.employees||[];
-    ORIGIN=e.origin;
-    document.getElementById('status').textContent='✅ '+employees.length+' employees loaded. Start camera.';
-  }
+  if(!e.data||!e.data.type) return;
+  if(e.data.type==='LOAD_EMPLOYEES') receiveEmployees({employees:e.data.employees,origin:e.origin});
 });
 
+// Send message to opener or parent
+function sendMsg(msg){
+  try{ if(window.opener){ window.opener.postMessage(msg,'*'); return; } }catch(ex){}
+  window.parent.postMessage(msg,'*');
+}
+
+// Load models with CPU backend
 faceapi.tf.setBackend('cpu').then(function(){
   return faceapi.tf.ready();
 }).then(function(){
   return Promise.all([
-    faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
-    faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+    faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL),
     faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
   ]);
 }).then(function(){
   modelsLoaded=true;
-  document.getElementById('status').textContent='✅ Models ready. '+(MODE==='register'?'Start camera to capture face.':'Waiting for data...');
-  window.parent.postMessage({type:'MODELS_READY'},'*');
-}).catch(function(e){
-  document.getElementById('status').textContent='❌ Model error: '+e.message;
+  document.getElementById('status').textContent='✅ Ready. '+(MODE==='register'?'Start camera & capture face.':'Start camera & verify.');
+  sendMsg({type:'MODELS_READY'});
+}).catch(function(err){
+  // fallback to full models
+  Promise.all([
+    faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
+    faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+    faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
+  ]).then(function(){
+    modelsLoaded=true;
+    document.getElementById('status').textContent='✅ Ready.';
+    sendMsg({type:'MODELS_READY'});
+  }).catch(function(e){
+    document.getElementById('status').textContent='❌ Model error: '+e.message;
+  });
 });
 
 function startCam(){
+  if(stream){ stream.getTracks().forEach(function(t){t.stop();}); }
   navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false})
   .then(function(s){
     stream=s;
@@ -95,40 +121,46 @@ function startCam(){
 }
 
 function doAction(){
+  if(!modelsLoaded){document.getElementById('status').textContent='⏳ Models still loading...';return;}
+  if(!stream){document.getElementById('status').textContent='Start camera first';return;}
   if(MODE==='register') doCapture();
   else doVerify();
 }
 
-function doCapture(){
-  if(!stream){document.getElementById('status').textContent='Start camera first';return;}
-  var statusEl=document.getElementById('status');
-  statusEl.textContent='🔍 Extracting face...';
-  if(!modelsLoaded){statusEl.textContent='⏳ Models still loading, please wait...';return;}
-  var vid=document.getElementById('vid');
-  faceapi.detectSingleFace(vid,new faceapi.SsdMobilenetv1Options({minConfidence:0.5}))
-  .withFaceLandmarks().withFaceDescriptor()
+function detect(vid){
+  // Try tiny detector first (faster), fall back to ssd
+  var opts=new faceapi.TinyFaceDetectorOptions({inputSize:224,scoreThreshold:0.4});
+  return faceapi.detectSingleFace(vid,opts).withFaceLandmarks(true).withFaceDescriptor()
   .then(function(det){
-    if(!det){document.getElementById('status').textContent='⚠️ No face detected. Try again.';return;}
+    if(det) return det;
+    return faceapi.detectSingleFace(vid,new faceapi.SsdMobilenetv1Options({minConfidence:0.4}))
+      .withFaceLandmarks().withFaceDescriptor();
+  });
+}
+
+function doCapture(){
+  var statusEl=document.getElementById('status');
+  statusEl.innerHTML='<span class="loader"></span>Extracting face...';
+  var vid=document.getElementById('vid');
+  detect(vid).then(function(det){
+    if(!det){statusEl.textContent='⚠️ No face detected. Try again.';return;}
     var cvs=document.createElement('canvas');
     cvs.width=vid.videoWidth;cvs.height=vid.videoHeight;
     cvs.getContext('2d').drawImage(vid,0,0);
     var pic=cvs.toDataURL('image/jpeg',0.85);
     var score=Math.round(det.detection.score*100);
-    document.getElementById('status').textContent='✅ Face captured! Quality: '+score+'%';
-   var msg={type:'FACE_CAPTURED',descriptor:Array.from(det.descriptor),photoB64:pic,quality:score};
-    if(window.opener) window.opener.postMessage(msg,'*');
-    else window.parent.postMessage(msg,'*');
-  }).catch(function(e){document.getElementById('status').textContent='❌ Error: '+e.message;});
+    statusEl.textContent='✅ Face captured! Quality: '+score+'%';
+    sendMsg({type:'FACE_CAPTURED',descriptor:Array.from(det.descriptor),photoB64:pic,quality:score});
+    setTimeout(function(){window.close();},1500);
+  }).catch(function(e){statusEl.textContent='❌ Error: '+e.message;});
 }
 
 function doVerify(){
-  if(!stream){document.getElementById('status').textContent='Start camera first';return;}
-  document.getElementById('status').textContent='🔍 Scanning...';
+  var statusEl=document.getElementById('status');
+  statusEl.innerHTML='<span class="loader"></span>Scanning...';
   var vid=document.getElementById('vid');
-  faceapi.detectSingleFace(vid,new faceapi.SsdMobilenetv1Options({minConfidence:0.5}))
-  .withFaceLandmarks().withFaceDescriptor()
-  .then(function(det){
-    if(!det){document.getElementById('status').textContent='⚠️ No face detected. Try again.';return;}
+  detect(vid).then(function(det){
+    if(!det){statusEl.textContent='⚠️ No face detected. Try again.';return;}
     var cvs=document.createElement('canvas');
     cvs.width=vid.videoWidth;cvs.height=vid.videoHeight;
     cvs.getContext('2d').drawImage(vid,0,0);
@@ -146,10 +178,12 @@ function doVerify(){
       var score=Math.round((1-bestD)*100);
       document.getElementById('rname').textContent=best.fullName;
       document.getElementById('rsub').textContent=best.department+' · '+best.employeeId+' · Match: '+score+'%';
-      document.getElementById('rbtns').innerHTML='<button class="bin" onclick="sendRecord(\'time_in\')">▶ TIME IN</button><button class="bout" onclick="sendRecord(\'time_out\')">◀ TIME OUT</button>';
+      document.getElementById('rbtns').innerHTML=
+        '<button class="bin" onclick="sendRecord(\'time_in\')">▶ TIME IN</button>'+
+        '<button class="bout" onclick="sendRecord(\'time_out\')">◀ TIME OUT</button>';
       document.getElementById('rfail').style.display='none';
       res.className='result ok';res.style.display='block';
-      document.getElementById('status').textContent='✅ Matched: '+best.fullName;
+      statusEl.textContent='✅ Matched: '+best.fullName;
     }else{
       verified=null;
       document.getElementById('rname').textContent='Not Recognized';
@@ -158,19 +192,26 @@ function doVerify(){
       document.getElementById('rfail').textContent='Face does not match any registered employee.';
       document.getElementById('rfail').style.display='block';
       res.className='result fail';res.style.display='block';
-      document.getElementById('status').textContent='❌ Not recognized.';
+      statusEl.textContent='❌ Not recognized. Try again.';
     }
-  }).catch(function(e){document.getElementById('status').textContent='❌ Error: '+e.message;});
+  }).catch(function(e){statusEl.textContent='❌ Error: '+e.message;});
 }
 
 function sendRecord(type){
   if(!verified)return;
-  var msg={type:'ATTENDANCE_RECORD',recordType:type,employee:verified,photoB64:capturedB64};
-  if(window.opener) window.opener.postMessage(msg,'*');
-  else window.parent.postMessage(msg,'*');
+  sendMsg({type:'ATTENDANCE_RECORD',recordType:type,employee:verified,photoB64:capturedB64});
   document.getElementById('status').textContent='📤 Sending...';
   document.getElementById('result').style.display='none';
+  setTimeout(function(){window.close();},1500);
 }
+
+// Auto-start camera after models load for speed
+var _autoStart=setInterval(function(){
+  if(modelsLoaded&&!stream){
+    clearInterval(_autoStart);
+    startCam();
+  }
+},500);
 </script>
 </body>
 </html>
