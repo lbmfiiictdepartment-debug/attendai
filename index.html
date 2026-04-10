@@ -60,11 +60,15 @@ window.addEventListener('message',function(e){
   }
 });
 
-Promise.all([
-  faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
-  faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
-  faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
-]).then(function(){
+faceapi.tf.setBackend('cpu').then(function() {
+  return faceapi.tf.ready();
+}).then(function() {
+  return Promise.all([
+    faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
+    faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+    faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
+  ]);
+}).then(function(){
   document.getElementById('status').textContent='✅ Models ready. Waiting for data...';
   window.parent.postMessage({type:'MODELS_READY'},'*');
 }).catch(function(e){
