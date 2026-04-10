@@ -50,7 +50,7 @@
 </div>
 <script>
 var MODEL_URL='https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights';
-var stream=null,employees=[],verified=null,capturedB64=null,ORIGIN='*';
+var stream=null,employees=[],verified=null,capturedB64=null,ORIGIN='*',modelsLoaded=false;
 var MODE=new URLSearchParams(window.location.search).get('mode')==='register'?'register':'clock';
 
 if(MODE==='register'){
@@ -74,6 +74,7 @@ faceapi.tf.setBackend('cpu').then(function(){
     faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
   ]);
 }).then(function(){
+  modelsLoaded=true;
   document.getElementById('status').textContent='✅ Models ready. '+(MODE==='register'?'Start camera to capture face.':'Waiting for data...');
   window.parent.postMessage({type:'MODELS_READY'},'*');
 }).catch(function(e){
@@ -100,7 +101,9 @@ function doAction(){
 
 function doCapture(){
   if(!stream){document.getElementById('status').textContent='Start camera first';return;}
-  document.getElementById('status').textContent='🔍 Extracting face...';
+  var statusEl=document.getElementById('status');
+  statusEl.textContent='🔍 Extracting face...';
+  if(!modelsLoaded){statusEl.textContent='⏳ Models still loading, please wait...';return;}
   var vid=document.getElementById('vid');
   faceapi.detectSingleFace(vid,new faceapi.SsdMobilenetv1Options({minConfidence:0.5}))
   .withFaceLandmarks().withFaceDescriptor()
