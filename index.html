@@ -40,7 +40,7 @@
 </div>
 <div class="btns">
   <button class="b1" onclick="startCam()">📷 Start Camera</button>
-  <button class="b2" id="btnV" onclick="doVerify()" disabled>⚡ Verify Face</button>
+  <button class="b2" id="btnV" onclick="doAction()" disabled>⚡ Verify Face</button>
 </div>
 <div class="result" id="result">
   <div class="rname" id="rname">—</div>
@@ -51,6 +51,11 @@
 <script>
 var MODEL_URL='https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights';
 var stream=null,employees=[],verified=null,capturedB64=null,ORIGIN='*';
+var MODE=new URLSearchParams(window.location.search).get('mode')==='register'?'register':'clock';
+
+if(MODE==='register'){
+  document.getElementById('btnV').textContent='📸 Capture Face';
+}
 
 window.addEventListener('message',function(e){
   if(e.data&&e.data.type==='LOAD_EMPLOYEES'){
@@ -60,16 +65,16 @@ window.addEventListener('message',function(e){
   }
 });
 
-faceapi.tf.setBackend('cpu').then(function() {
+faceapi.tf.setBackend('cpu').then(function(){
   return faceapi.tf.ready();
-}).then(function() {
+}).then(function(){
   return Promise.all([
     faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
     faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
     faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
   ]);
 }).then(function(){
-  document.getElementById('status').textContent='✅ Models ready. Waiting for data...';
+  document.getElementById('status').textContent='✅ Models ready. '+(MODE==='register'?'Start camera to capture face.':'Waiting for data...');
   window.parent.postMessage({type:'MODELS_READY'},'*');
 }).catch(function(e){
   document.getElementById('status').textContent='❌ Model error: '+e.message;
@@ -82,10 +87,33 @@ function startCam(){
     document.getElementById('vid').srcObject=s;
     document.getElementById('msg').style.display='none';
     document.getElementById('btnV').disabled=false;
-    document.getElementById('status').textContent='✅ Camera ready. Click Verify Face.';
+    document.getElementById('status').textContent='✅ Camera ready. Click '+(MODE==='register'?'Capture Face':'Verify Face')+'.';
   }).catch(function(e){
     document.getElementById('status').textContent='❌ Camera error: '+e.message;
   });
+}
+
+function doAction(){
+  if(MODE==='register') doCapture();
+  else doVerify();
+}
+
+function doCapture(){
+  if(!stream){document.getElementById('status').textContent='Start camera first';return;}
+  document.getElementById('status').textContent='🔍 Extracting face...';
+  var vid=document.getElementById('vid');
+  faceapi.detectSingleFace(vid,new faceapi.SsdMobilenetv1Options({minConfidence:0.5}))
+  .withFaceLandmarks().withFaceDescriptor()
+  .then(function(det){
+    if(!det){document.getElementById('status').textContent='⚠️ No face detected. Try again.';return;}
+    var cvs=document.createElement('canvas');
+    cvs.width=vid.videoWidth;cvs.height=vid.videoHeight;
+    cvs.getContext('2d').drawImage(vid,0,0);
+    var pic=cvs.toDataURL('image/jpeg',0.85);
+    var score=Math.round(det.detection.score*100);
+    document.getElementById('status').textContent='✅ Face captured! Quality: '+score+'%';
+    window.parent.postMessage({type:'FACE_CAPTURED',descriptor:Array.from(det.descriptor),photoB64:pic,quality:score},ORIGIN||'*');
+  }).catch(function(e){document.getElementById('status').textContent='❌ Error: '+e.message;});
 }
 
 function doVerify(){
@@ -117,7 +145,7 @@ function doVerify(){
       document.getElementById('rfail').style.display='none';
       res.className='result ok';res.style.display='block';
       document.getElementById('status').textContent='✅ Matched: '+best.fullName;
-    } else {
+    }else{
       verified=null;
       document.getElementById('rname').textContent='Not Recognized';
       document.getElementById('rsub').textContent='';
