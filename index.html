@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<meta name="theme-color" content="#0a0e1a">
+<title>AttendAI — Clock In/Out</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+<style>
+/* paste your entire Stylesheet.html contents here (everything between <style> and </style>) */
+</style>
+</head>
+<body>
+<!-- CAMERA PAGE ONLY -->
+<main id="main" style="margin-left:0;padding:20px">
+  <div class="pg-head">
+    <div><h1>Clock In / Out</h1><p class="sub">Facial capture + location verification</p></div>
+  </div>
+  <div class="clock-layout">
+    <div class="cam-panel">
+      <div class="cam-wrap" id="camWrap">
+        <video id="vidFeed" autoplay muted playsinline></video>
+        <canvas id="camCanvas"></canvas>
+        <div class="cam-ring-wrap">
+          <div class="cam-ring" id="camRing"></div>
+          <div class="cam-scan" id="camScan"></div>
+        </div>
+        <div class="cam-hud">
+          <div class="hud-tl">LIVE</div>
+          <div class="hud-tr" id="hudTime">00:00:00</div>
+          <div class="hud-bl" id="hudGPS"><i class="fa-solid fa-location-dot"></i> —</div>
+          <div class="hud-br" id="hudNet"><i class="fa-solid fa-wifi"></i> —</div>
+        </div>
+        <div class="cam-msg" id="camMsg"><i class="fa-solid fa-camera-slash"></i> Camera not started</div>
+      </div>
+      <div id="verifyBox" class="verify-box hidden">
+        <div class="verify-top">
+          <div class="vfy-avatar" id="vfyAva"></div>
+          <div class="vfy-info">
+            <div class="vfy-name" id="vfyName">—</div>
+            <div class="vfy-sub" id="vfySub">—</div>
+            <div class="vfy-score" id="vfyScore"></div>
+          </div>
+        </div>
+        <div class="verify-btns">
+          <button class="btn-timein" id="btnIn" onclick="doRecord('time_in')"><i class="fa-solid fa-arrow-right-to-bracket"></i> TIME IN</button>
+          <button class="btn-timeout" id="btnOut" onclick="doRecord('time_out')"><i class="fa-solid fa-arrow-right-from-bracket"></i> TIME OUT</button>
+        </div>
+        <div id="vfyError" class="vfy-error hidden"><i class="fa-solid fa-triangle-exclamation"></i> <span></span></div>
+      </div>
+      <div class="cam-controls">
+        <button class="cc-btn" id="btnStartCam" onclick="startClockCam()"><i class="fa-solid fa-camera"></i> Start Camera</button>
+        <button class="cc-btn primary" id="btnVerify" onclick="captureVerify()" disabled><i class="fa-solid fa-bolt"></i> Verify Face</button>
+      </div>
+    </div>
+    <div class="status-panel">
+      <div class="clock-display"><div id="bigClock">00:00:00</div><div id="bigDate">—</div></div>
+      <div class="card sp-card" id="gpsCard">
+        <div class="sp-card-head"><i class="fa-solid fa-location-dot"></i> GPS Status</div>
+        <div id="gpsStatusText" class="sp-val blink-text">Waiting for signal...</div>
+        <div id="gpsCoords" class="sp-mono">—</div>
+        <div id="gpsAddr" class="sp-addr">—</div>
+        <div id="gfBadge" class="gf-badge hidden"></div>
+        <div id="gpsAccBar" class="acc-bar hidden">
+          <span class="acc-label">Accuracy</span>
+          <div class="acc-track"><div id="accFill" class="acc-fill"></div></div>
+          <span id="accMeters" class="acc-meters">—</span>
+        </div>
+      </div>
+      <div class="card sp-card">
+        <div class="sp-card-head"><i class="fa-solid fa-network-wired"></i> Network</div>
+        <div id="netType" class="sp-val">Detecting...</div>
+        <div class="info-rows" style="margin-top:10px">
+          <div class="info-r"><span class="ir-lbl">IP Address</span><span class="ir-val" id="clockIP">—</span></div>
+        </div>
+      </div>
+      <div class="card sp-card">
+        <div class="sp-card-head"><i class="fa-solid fa-mobile-screen"></i> Device</div>
+        <div class="info-rows">
+          <div class="info-r"><span class="ir-lbl">Platform</span><span class="ir-val" id="devPlatform">—</span></div>
+          <div class="info-r"><span class="ir-lbl">Screen</span><span class="ir-val" id="devScreen">—</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+<div id="loadOverlay" class="load-overlay hidden">
+  <div class="load-box"><div class="load-spinner"></div><span id="loadMsg">Processing...</span></div>
+</div>
+<div id="toasts" class="toast-stack"></div>
+
+<script>
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbyiZmEIfZz2PuMkODo_GemKvf_zcQBrfCsK7ESw659xmwxBhjCA-h-tJhwBBLwE43U3/exec';
+
+var A = {
+  config:{}, employees:[], camStream:null, modelsReady:false,
+  verified:null, capturedPic:null, gps:null, gpsWatchId:null,
+  ip:'', netInfo:'', device:''
+};
+
+function el(id){ return document.getElementById(id); }
+function setText(id,v){ var e=el(id); if(e) e.textContent=v; }
+
+// Clock
+function startClock() {
+  function tick() {
+    var now = new Date();
+    var pad = function(n){ return String(n).padStart(2,'0'); };
+    var t = pad(now.getHours())+':'+pad(now.getMinutes())+':'+pad(now.getSeconds());
+    var days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    var months=['January','February','March','April','May','June','July','August','September','October','November','December'];
+    var d = days[now.getDay()]+', '+months[now.getMonth()]+' '+now.getDate()+', '+now.getFullYear();
+    el('bigClock').textContent=t; el('bigDate').textContent=d; el('hudTime').textContent=t;
+  }
+  tick(); setInterval(tick,1000);
+}
+
+// GAS API calls via fetch
+function gasCall(func, params) {
+  var url = GAS_URL + '?action=' + func + '&data=' + encodeURIComponent(JSON.stringify(params||{}));
+  return fetch(url).then(function(r){ return r.json(); });
+}
+
+function gasPost(func, params) {
+  return fetch(GAS_URL, {
+    method:'POST',
+    headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    body:'action='+func+'&data='+encodeURIComponent(JSON.stringify(params||{}))
+  }).then(function(r){ return r.json(); });
+}
+
+// Load config and employees from GAS
+function loadAll() {
+  return fetch(GAS_URL + '?action=getConfig')
+    .then(function(r){ return r.json(); })
+    .then(function(cfg){
+      A.config = cfg || {};
+      return fetch(GAS_URL + '?action=getEmployees');
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(emps){ A.employees = emps || []; });
+}
+
+// Face models
+function loadFaceModels() {
+  var URL = 'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights';
+  toast('Loading face models...','info');
+  return Promise.all([
+    faceapi.nets.ssdMobilenetv1.loadFromUri(URL),
+    faceapi.nets.faceLandmark68Net.loadFromUri(URL),
+    faceapi.nets.faceRecognitionNet.loadFromUri(URL)
+  ]).then(function(){ A.modelsReady=true; toast('Face models ready','ok'); })
+    .catch(function(){ toast('Face model load failed','err'); });
+}
+
+// GPS
+function startGPS() {
+  if (!navigator.geolocation) return;
+  A.gpsWatchId = navigator.geolocation.watchPosition(function(pos){
+    var c = pos.coords;
+    A.gps = {lat:c.latitude, lng:c.longitude, accuracy:c.accuracy, speed:c.speed};
+    setText('gpsStatusText','Signal acquired');
+    el('gpsStatusText').classList.remove('blink-text');
+    setText('gpsCoords', c.latitude.toFixed(6)+', '+c.longitude.toFixed(6));
+    el('gpsAccBar').classList.remove('hidden');
+    var pct = Math.max(0,Math.min(100,100-(c.accuracy/50)*100));
+    el('accFill').style.width=pct+'%';
+    setText('accMeters', Math.round(c.accuracy)+'m');
+    el('hudGPS').innerHTML='<i class="fa-solid fa-location-dot"></i> '+c.latitude.toFixed(4)+', '+c.longitude.toFixed(4);
+    fetch('https://nominatim.openstreetmap.org/reverse?lat='+c.latitude+'&lon='+c.longitude+'&format=json')
+      .then(function(r){return r.json();})
+      .then(function(d){ if(d.display_name){ A.gps.address=d.display_name.split(',').slice(0,3).join(', '); setText('gpsAddr',A.gps.address); }})
+      .catch(function(){});
+  }, function(e){ console.warn(e); }, {enableHighAccuracy:true,maximumAge:3000,timeout:10000});
+}
+
+// Network
+function detectNetwork() {
+  var conn = navigator.connection||navigator.mozConnection||navigator.webkitConnection;
+  if (conn) {
+    var type = (conn.effectiveType||conn.type||'').toUpperCase();
+    A.netInfo = type; setText('netType', type||'Unknown');
+    el('hudNet').innerHTML='<i class="fa-solid fa-wifi"></i> '+(type||'Net');
+  }
+  fetch('https://api.ipify.org?format=json')
+    .then(function(r){return r.json();})
+    .then(function(d){ A.ip=d.ip||''; setText('clockIP',A.ip); })
+    .catch(function(){});
+  var ua=navigator.userAgent;
+  var dev='Desktop';
+  if(/iPhone/.test(ua)) dev='iPhone';
+  else if(/Android/.test(ua)) dev='Android';
+  A.device=dev;
+  setText('devPlatform',dev);
+  setText('devScreen',screen.width+'x'+screen.height);
+}
+
+// Camera
+function startClockCam() {
+  navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false})
+    .then(function(stream){
+      A.camStream=stream;
+      el('vidFeed').srcObject=stream;
+      el('btnVerify').disabled=false;
+      el('camMsg').style.display='none';
+      toast('Camera started','ok');
+    })
+    .catch(function(e){ toast('Camera error: '+e.message,'err'); });
+}
+
+function captureVerify() {
+  if (!A.modelsReady){ toast('Models loading...','warn'); return; }
+  if (!A.camStream){ toast('Start camera first','warn'); return; }
+  loading(true,'Verifying face...');
+  var vid=el('vidFeed');
+  faceapi.detectSingleFace(vid, new faceapi.SsdMobilenetv1Options({minConfidence:0.5}))
+    .withFaceLandmarks().withFaceDescriptor()
+    .then(function(det){
+      if (!det){ loading(false); toast('No face detected','warn'); return; }
+      var cvs=document.createElement('canvas');
+      cvs.width=vid.videoWidth; cvs.height=vid.videoHeight;
+      cvs.getContext('2d').drawImage(vid,0,0);
+      A.capturedPic=cvs.toDataURL('image/jpeg',0.75);
+      var thresh=+(A.config.FACE_THRESHOLD||0.55);
+      var best=null, bestD=Infinity;
+      A.employees.forEach(function(emp){
+        if (!emp.faceDescriptor) return;
+        var arr=Array.isArray(emp.faceDescriptor)?emp.faceDescriptor:Object.values(emp.faceDescriptor);
+        var d=faceapi.euclideanDistance(det.descriptor, new Float32Array(arr));
+        if (d<bestD){ bestD=d; best=emp; }
+      });
+      loading(false);
+      if (best && bestD<thresh){ A.verified=best; showVerify(best,Math.round((1-bestD)*100),true); }
+      else { A.verified=null; showVerify(null,null,false); }
+    })
+    .catch(function(e){ loading(false); toast('Error: '+e.message,'err'); });
+}
+
+function showVerify(emp,score,ok){
+  var box=el('verifyBox');
+  box.classList.remove('hidden','ok','fail');
+  box.classList.add(ok?'ok':'fail');
+  el('vfyError').classList.add('hidden');
+  if (ok&&emp){
+    el('vfyAva').innerHTML=emp.photoUrl?'<img src="'+emp.photoUrl+'" alt="">':emp.fullName.split(' ').map(function(n){return n[0];}).join('').substring(0,2).toUpperCase();
+    setText('vfyName',emp.fullName);
+    setText('vfySub',emp.department+' · '+(emp.position||'Staff')+' · '+emp.employeeId);
+    setText('vfyScore','Face Match: '+score+'%');
+    el('btnIn').style.display=''; el('btnOut').style.display='';
+  } else {
+    el('vfyAva').innerHTML='<i class="fa-solid fa-user-slash"></i>';
+    setText('vfyName','Not Recognized');
+    setText('vfySub','Face does not match any registered employee');
+    setText('vfyScore','');
+    el('btnIn').style.display='none'; el('btnOut').style.display='none';
+    el('vfyError').classList.remove('hidden');
+    el('vfyError').querySelector('span').textContent='Employee not registered or face not clear enough.';
+  }
+}
+
+function doRecord(type){
+  if (!A.verified){ toast('No verified employee','err'); return; }
+  loading(true, type==='time_in'?'Recording Time In...':'Recording Time Out...');
+  function finalize(photoUrl){
+    var rec={
+      employeeId:A.verified.employeeId, fullName:A.verified.fullName,
+      department:A.verified.department, position:A.verified.position||'', type:type,
+      latitude:A.gps?A.gps.lat:'', longitude:A.gps?A.gps.lng:'',
+      accuracy:A.gps?A.gps.accuracy:'', address:A.gps?(A.gps.address||')':'',
+      ipAddress:A.ip, networkType:A.netInfo,
+      userAgent:navigator.userAgent.substring(0,200), device:A.device,
+      faceScore:el('vfyScore')?el('vfyScore').textContent:'',
+      faceVerified:true, photoUrl:photoUrl, remarks:''
+    };
+    fetch(GAS_URL, {
+      method:'POST', mode:'no-cors',
+      headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify({action:'logAttendance', data:rec})
+    }).then(function(){
+      loading(false);
+      toast((type==='time_in'?'Time In':'Time Out')+' recorded!','ok');
+      el('verifyBox').classList.add('hidden');
+      A.verified=null; A.capturedPic=null;
+    }).catch(function(e){ loading(false); toast('Error: '+e.message,'err'); });
+  }
+  if (A.capturedPic){
+    fetch(GAS_URL, {
+      method:'POST', mode:'no-cors',
+      headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify({action:'uploadPhoto', b64:A.capturedPic, fileName:A.verified.employeeId+'_'+Date.now()+'.jpg'})
+    }).then(function(){ finalize(''); }).catch(function(){ finalize(''); });
+  } else { finalize(''); }
+}
+
+function loading(show,msg){ el('loadOverlay').classList.toggle('hidden',!show); if(msg) setText('loadMsg',msg); }
+function toast(msg,type){
+  type=type||'info';
+  var icons={ok:'circle-check',err:'circle-xmark',warn:'triangle-exclamation',info:'circle-info'};
+  var t=document.createElement('div');
+  t.className='toast '+type;
+  t.innerHTML='<i class="fa-solid fa-'+(icons[type]||'circle-info')+'"></i><span>'+msg+'</span>';
+  el('toasts').appendChild(t);
+  setTimeout(function(){ t.style.transition='opacity .4s'; t.style.opacity='0'; setTimeout(function(){t.remove();},400); },4000);
+}
+
+// Boot
+window.addEventListener('load', function(){
+  startClock();
+  detectNetwork();
+  startGPS();
+  loadFaceModels();
+  loadAll().then(function(){ toast('Ready — '+A.employees.length+' employees loaded','ok'); });
+});
+</script>
+</body>
+</html>
