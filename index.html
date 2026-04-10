@@ -115,7 +115,9 @@ function doCapture(){
     var pic=cvs.toDataURL('image/jpeg',0.85);
     var score=Math.round(det.detection.score*100);
     document.getElementById('status').textContent='✅ Face captured! Quality: '+score+'%';
-    window.parent.postMessage({type:'FACE_CAPTURED',descriptor:Array.from(det.descriptor),photoB64:pic,quality:score},ORIGIN||'*');
+   var msg={type:'FACE_CAPTURED',descriptor:Array.from(det.descriptor),photoB64:pic,quality:score};
+    if(window.opener) window.opener.postMessage(msg,'*');
+    else window.parent.postMessage(msg,'*');
   }).catch(function(e){document.getElementById('status').textContent='❌ Error: '+e.message;});
 }
 
@@ -163,7 +165,9 @@ function doVerify(){
 
 function sendRecord(type){
   if(!verified)return;
-  window.parent.postMessage({type:'ATTENDANCE_RECORD',recordType:type,employee:verified,photoB64:capturedB64},ORIGIN||'*');
+  var msg={type:'ATTENDANCE_RECORD',recordType:type,employee:verified,photoB64:capturedB64};
+  if(window.opener) window.opener.postMessage(msg,'*');
+  else window.parent.postMessage(msg,'*');
   document.getElementById('status').textContent='📤 Sending...';
   document.getElementById('result').style.display='none';
 }
