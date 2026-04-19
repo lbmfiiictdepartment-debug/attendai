@@ -2,216 +2,624 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Face Capture</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>Clock In / Out</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 <style>
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{background:#080b14;color:#e2e8f6;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:16px;gap:12px}
-  .cam-wrap{position:relative;width:100%;max-width:420px;aspect-ratio:4/3;background:#000;border-radius:14px;overflow:hidden;border:1px solid #ffffff18}
-  video{width:100%;height:100%;object-fit:cover;display:block}
-  .ring{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
-  .ring div{width:55%;aspect-ratio:1;border-radius:50%;border:2px solid rgba(59,130,246,.6);animation:rp 2.5s infinite}
-  @keyframes rp{0%,100%{border-color:rgba(59,130,246,.5)}50%{border-color:rgba(6,182,212,.8)}}
-  .msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(8,11,20,.8);font-size:13px;color:#64748b;flex-direction:column;gap:8px}
-  .btns{display:flex;gap:10px;width:100%;max-width:420px}
-  button{flex:1;padding:12px;border-radius:10px;border:none;font-size:14px;font-weight:600;cursor:pointer;transition:opacity .2s}
-  button:active{opacity:.7}
-  .b1{background:#1a2236;color:#e2e8f6;border:1px solid #ffffff18}
-  .b2{background:rgba(59,130,246,.2);color:#3b82f6;border:1px solid rgba(59,130,246,.4)}
-  .b2:disabled{opacity:.35;cursor:not-allowed}
-  #status{font-size:12px;color:#64748b;text-align:center;max-width:420px;min-height:18px}
-  .result{width:100%;max-width:420px;background:#111827;border:1px solid #ffffff18;border-radius:14px;padding:16px;display:none}
-  .result.ok{border-color:rgba(16,185,129,.5);background:rgba(16,185,129,.05)}
-  .result.fail{border-color:rgba(239,68,68,.5);background:rgba(239,68,68,.05)}
-  .rname{font-size:18px;font-weight:700;margin-bottom:3px}
-  .rsub{font-size:12px;color:#64748b;margin-bottom:14px}
-  .rbtns{display:flex;gap:10px}
-  .bin{flex:1;padding:14px;border-radius:10px;border:1px solid rgba(16,185,129,.3);background:rgba(16,185,129,.15);color:#10b981;font-weight:700;cursor:pointer;font-size:15px}
-  .bout{flex:1;padding:14px;border-radius:10px;border:1px solid rgba(59,130,246,.3);background:rgba(59,130,246,.15);color:#3b82f6;font-weight:700;cursor:pointer;font-size:15px}
-  .rfail{font-size:13px;color:#ef4444;text-align:center;padding:8px}
-  .loader{display:inline-block;width:14px;height:14px;border:2px solid #ffffff30;border-top-color:#3b82f6;border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:6px}
-  @keyframes spin{to{transform:rotate(360deg)}}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#080b14;color:#e2e8f6;font-family:'Inter',sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:20px 16px 28px;overflow-x:hidden}
+h2{font-size:20px;font-weight:700;margin-bottom:4px;text-align:center}
+.sub{font-size:12px;color:#64748b;margin-bottom:16px;text-align:center}
+/* status bar */
+#statusBar{width:100%;max-width:420px;padding:9px 14px;border-radius:10px;font-size:12px;font-weight:500;margin-bottom:14px;border:1px solid transparent;transition:all .3s;text-align:center}
+#statusBar.loading{background:rgba(59,130,246,.08);border-color:rgba(59,130,246,.2);color:#60a5fa}
+#statusBar.ok   {background:rgba(16,185,129,.08);border-color:rgba(16,185,129,.2);color:#34d399}
+#statusBar.warn {background:rgba(245,158,11,.08); border-color:rgba(245,158,11,.2); color:#fbbf24}
+#statusBar.err  {background:rgba(239,68,68,.08);  border-color:rgba(239,68,68,.2);  color:#f87171}
+/* camera */
+.cam-wrap{position:relative;width:100%;max-width:420px;aspect-ratio:4/3;background:#0d1220;border-radius:14px;overflow:hidden;border:1px solid #ffffff18;margin-bottom:12px}
+video{width:100%;height:100%;object-fit:cover;display:block;transform:scaleX(-1)}
+canvas#overlay{position:absolute;inset:0;width:100%;height:100%;transform:scaleX(-1)}
+/* ring guide */
+.ring{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.ring-inner{width:52%;aspect-ratio:1;border-radius:50%;border:2px solid rgba(59,130,246,.55);animation:ringPulse 2.5s infinite}
+@keyframes ringPulse{0%,100%{border-color:rgba(59,130,246,.55)}50%{border-color:rgba(6,182,212,.85)}}
+/* scan line */
+.scan-line{position:absolute;left:24%;right:24%;height:1.5px;background:linear-gradient(90deg,transparent,#06b6d4,transparent);animation:scanMove 3s ease-in-out infinite;opacity:.7}
+@keyframes scanMove{0%{top:22%;opacity:0}15%{opacity:1}85%{opacity:1}100%{top:78%;opacity:0}}
+/* hud */
+.hud{position:absolute;inset:0;pointer-events:none;font-size:10px;font-family:'Courier New',monospace}
+.hud-tl{position:absolute;top:8px;left:10px;background:rgba(8,11,20,.65);padding:4px 8px;border-radius:5px;color:#ef4444;font-weight:700;letter-spacing:1px}
+.hud-tr{position:absolute;top:8px;right:10px;background:rgba(8,11,20,.65);padding:4px 8px;border-radius:5px;color:#64748b}
+.hud-bl{position:absolute;bottom:8px;left:10px;background:rgba(8,11,20,.65);padding:4px 8px;border-radius:5px;color:#64748b;max-width:55%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hud-br{position:absolute;bottom:8px;right:10px;background:rgba(8,11,20,.65);padding:4px 8px;border-radius:5px;color:#64748b}
+/* lighting meter */
+.light-bar{position:absolute;top:8px;left:50%;transform:translateX(-50%);background:rgba(8,11,20,.65);padding:4px 10px;border-radius:5px;display:flex;align-items:center;gap:6px;font-size:10px;color:#64748b}
+.lb-track{width:60px;height:4px;background:#1e293b;border-radius:2px;overflow:hidden}
+.lb-fill{height:100%;border-radius:2px;transition:width .3s,background .3s}
+/* cam msg overlay */
+.cam-msg{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(8,11,20,.82);font-size:13px;color:#64748b;gap:10px}
+.cam-msg i{font-size:32px}
+/* buttons */
+.btns{display:flex;gap:10px;width:100%;max-width:420px;margin-bottom:12px}
+button{flex:1;padding:11px;border-radius:10px;border:none;font-family:'Inter',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:6px}
+.btn-cam{background:#1a2236;color:#e2e8f6;border:1px solid #ffffff18}
+.btn-cam:hover{background:#1f2a40}
+.btn-cam.active{background:rgba(239,68,68,.12);color:#ef4444;border-color:rgba(239,68,68,.3)}
+.btn-verify{background:rgba(59,130,246,.12);color:#3b82f6;border:1px solid rgba(59,130,246,.3)}
+.btn-verify:hover:not(:disabled){background:rgba(59,130,246,.2)}
+.btn-verify:disabled{opacity:.3;cursor:not-allowed}
+/* result card */
+.result{width:100%;max-width:420px;background:#111827;border:1px solid rgba(16,185,129,.3);border-radius:14px;padding:16px;display:none;animation:fadeUp .25s ease}
+.result.fail{border-color:rgba(239,68,68,.3)}
+@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.res-top{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.res-av{width:52px;height:52px;border-radius:50%;background:#1a2236;border:2px solid rgba(16,185,129,.3);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#3b82f6;overflow:hidden;flex-shrink:0}
+.res-av img{width:100%;height:100%;object-fit:cover}
+.res-name{font-size:17px;font-weight:700}
+.res-sub{font-size:12px;color:#64748b;margin-top:2px}
+.res-score{font-size:11px;color:#10b981;margin-top:3px;font-family:'Courier New',monospace}
+.res-btns{display:flex;gap:10px}
+.btn-in{flex:1;padding:12px;border-radius:10px;border:none;background:rgba(16,185,129,.12);color:#10b981;border:1px solid rgba(16,185,129,.25);font-family:'Inter',sans-serif;font-weight:600;font-size:13px;cursor:pointer;transition:all .2s}
+.btn-in:hover:not(:disabled){background:rgba(16,185,129,.22)}
+.btn-out{flex:1;padding:12px;border-radius:10px;border:none;background:rgba(59,130,246,.12);color:#3b82f6;border:1px solid rgba(59,130,246,.25);font-family:'Inter',sans-serif;font-weight:600;font-size:13px;cursor:pointer;transition:all .2s}
+.btn-out:hover:not(:disabled){background:rgba(59,130,246,.22)}
+.btn-in:disabled,.btn-out:disabled{opacity:.35;cursor:not-allowed}
+.res-err{margin-top:10px;padding:9px 12px;border-radius:8px;font-size:12px;background:rgba(239,68,68,.08);color:#f87171;border:1px solid rgba(239,68,68,.2)}
+/* GPS indicator */
+.gps-row{display:flex;align-items:center;gap:8px;font-size:11px;color:#64748b;margin-bottom:10px;width:100%;max-width:420px}
+.gps-dot{width:7px;height:7px;border-radius:50%;background:#64748b;flex-shrink:0;animation:blinkDot 2s infinite}
+.gps-dot.acquired{background:#10b981;box-shadow:0 0 6px rgba(16,185,129,.5)}
+@keyframes blinkDot{0%,100%{opacity:1}50%{opacity:.4}}
+/* threshold hint */
+.thresh-row{display:flex;align-items:center;gap:8px;width:100%;max-width:420px;font-size:11px;color:#64748b;margin-bottom:14px}
+.thresh-row input[type=range]{flex:1;accent-color:#3b82f6}
+.thresh-val{font-family:'Courier New',monospace;color:#60a5fa;min-width:32px}
+/* tips */
+.tips{width:100%;max-width:420px;background:#0d1120;border:1px solid #ffffff0d;border-radius:10px;padding:12px 14px;font-size:11px;color:#475569;line-height:1.7;display:none}
+.tips.show{display:block}
+.tips b{color:#64748b;font-weight:600}
+/* toast */
+.toast-stack{position:fixed;bottom:16px;right:16px;display:flex;flex-direction:column;gap:6px;z-index:999}
+.toast{background:#1a2236;border:1px solid #ffffff18;border-radius:9px;padding:10px 14px;font-size:12px;display:flex;align-items:center;gap:8px;max-width:280px;animation:toastIn .2s ease}
+@keyframes toastIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+.toast.ok {border-left:3px solid #10b981}
+.toast.err{border-left:3px solid #ef4444}
+.toast.warn{border-left:3px solid #f59e0b}
+.toast.info{border-left:3px solid #3b82f6}
 </style>
 </head>
 <body>
-<div id="status">⏳ Loading models...</div>
-<div class="cam-wrap">
+
+<h2>Face Verification</h2>
+<p class="sub">Facial capture · GPS · Network</p>
+
+<div id="statusBar" class="loading">⏳ Loading face recognition models…</div>
+
+<div class="cam-wrap" id="camWrap">
   <video id="vid" autoplay muted playsinline></video>
-  <div class="ring"><div></div></div>
-  <div class="msg" id="msg"><span>📷 Camera not started</span></div>
+  <canvas id="overlay"></canvas>
+  <div class="ring"><div class="ring-inner"></div></div>
+  <div class="scan-line" id="scanLine" style="display:none"></div>
+  <div class="hud">
+    <div class="hud-tl" id="hudRec" style="display:none">● REC</div>
+    <div class="hud-tr" id="hudTime">--:--:--</div>
+    <div class="hud-bl" id="hudGPS">GPS: waiting…</div>
+    <div class="hud-br" id="hudFaces">0 face</div>
+  </div>
+  <div class="light-bar" id="lightBar" style="display:none">
+    <span>Light</span>
+    <div class="lb-track"><div class="lb-fill" id="lbFill" style="width:0%;background:#ef4444"></div></div>
+    <span id="lbLabel">—</span>
+  </div>
+  <div class="cam-msg" id="camMsg">
+    <span style="font-size:32px">📷</span>
+    <span>Click <b style="color:#e2e8f6">Start Camera</b> to begin</span>
+  </div>
 </div>
+
+<div class="gps-row">
+  <div class="gps-dot" id="gpsDot"></div>
+  <span id="gpsText">GPS: acquiring signal…</span>
+</div>
+
 <div class="btns">
-  <button class="b1" onclick="startCam()">📷 Start Camera</button>
-  <button class="b2" id="btnV" onclick="doAction()" disabled>⚡ Verify Face</button>
+  <button class="btn-cam" id="btnCam" onclick="toggleCam()">📷 Start Camera</button>
+  <button class="btn-verify" id="btnVerify" onclick="verifyFace()" disabled>⚡ Verify Face</button>
 </div>
+
+<!-- Sensitivity control -->
+<div class="thresh-row">
+  <span>Sensitivity</span>
+  <input type="range" id="threshSlider" min="0.40" max="0.75" step="0.01" value="0.60" oninput="updateThresh(this.value)">
+  <span class="thresh-val" id="threshVal">0.60</span>
+  <span style="color:#475569">← looser</span>
+</div>
+
 <div class="result" id="result">
-  <div class="rname" id="rname">—</div>
-  <div class="rsub" id="rsub">—</div>
-  <div class="rbtns" id="rbtns"></div>
-  <div class="rfail" id="rfail" style="display:none"></div>
+  <div class="res-top">
+    <div class="res-av" id="resAv">?</div>
+    <div>
+      <div class="res-name" id="resName">—</div>
+      <div class="res-sub" id="resSub">—</div>
+      <div class="res-score" id="resScore"></div>
+    </div>
+  </div>
+  <div class="res-btns" id="resBtns">
+    <button class="btn-in" id="btnIn" onclick="record('time_in')">✅ TIME IN</button>
+    <button class="btn-out" id="btnOut" onclick="record('time_out')">🚪 TIME OUT</button>
+  </div>
+  <div class="res-err" id="resErr" style="display:none"></div>
 </div>
+
+<!-- Tips -->
+<div class="tips" id="tips" style="margin-top:10px;width:100%;max-width:420px">
+  <b>Tips for better recognition:</b><br>
+  • Face the light source — avoid windows or bright lights behind you<br>
+  • Center your face inside the blue ring<br>
+  • Remove glasses, hats, or masks<br>
+  • Hold still when clicking Verify Face<br>
+  • If still failing, increase the <b>Sensitivity</b> slider (move right)
+</div>
+<button onclick="document.getElementById('tips').classList.toggle('show')" style="background:none;border:none;color:#475569;font-size:11px;margin-top:6px;width:100%;max-width:420px;text-align:left;padding:0;cursor:pointer">💡 Show / hide tips</button>
+
+<div class="toast-stack" id="toastStack"></div>
+
 <script>
-var MODEL_URL='https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights';
-var stream=null,employees=[],verified=null,capturedB64=null,ORIGIN='*',modelsLoaded=false;
-var MODE=new URLSearchParams(window.location.search).get('mode')==='register'?'register':'clock';
+var S = {
+  stream: null,
+  employees: [],
+  modelsReady: false,
+  verified: null,
+  capturedB64: null,
+  gps: null,
+  gpsWatchId: null,
+  detecting: false,
+  detectLoop: null,
+  threshold: 0.60,
+  ip: '',
+  net: ''
+};
 
-if(MODE==='register'){
-  document.getElementById('btnV').textContent='📸 Capture Face';
-}
+var MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model';
 
-// Receive employees from parent/opener
-function receiveEmployees(data){
-  employees=data.employees||[];
-  ORIGIN=data.origin||'*';
-  document.getElementById('status').textContent='✅ '+employees.length+' employees loaded.';
-}
+// ── Clock ──────────────────────────────────────────────────
+setInterval(function(){
+  var d = new Date();
+  var p = function(n){return String(n).padStart(2,'0');};
+  document.getElementById('hudTime').textContent = p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());
+}, 1000);
 
-window.addEventListener('message',function(e){
-  if(!e.data||!e.data.type) return;
-  if(e.data.type==='LOAD_EMPLOYEES') receiveEmployees({employees:e.data.employees,origin:e.origin});
-});
+// ── Load models ────────────────────────────────────────────
+setStatus('loading', '⏳ Loading face models (first load may take ~20s)…');
 
-// Send message to opener or parent
-function sendMsg(msg){
-  try{ if(window.opener){ window.opener.postMessage(msg,'*'); return; } }catch(ex){}
-  window.parent.postMessage(msg,'*');
-}
-
-// Load models with CPU backend
-faceapi.tf.setBackend('cpu').then(function(){
-  return faceapi.tf.ready();
-}).then(function(){
-  return Promise.all([
-    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-    faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL),
-    faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
-  ]);
-}).then(function(){
-  modelsLoaded=true;
-  document.getElementById('status').textContent='✅ Ready. '+(MODE==='register'?'Start camera & capture face.':'Start camera & verify.');
-  sendMsg({type:'MODELS_READY'});
-}).catch(function(err){
-  // fallback to full models
+Promise.all([
+  faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
+  faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+  faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
+]).then(function(){
+  S.modelsReady = true;
+  setStatus('ok', '✅ Models ready — waiting for employees…');
+  toast('Face models loaded', 'ok');
+  // Notify parent that models are ready — request employee list
+  sendToParent({ type: 'MODELS_READY' });
+}).catch(function(e){
+  // Fallback CDN
+  setStatus('warn', '⚠ Retrying model load (fallback CDN)…');
+  var FB = 'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights';
   Promise.all([
-    faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
-    faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
-    faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
+    faceapi.nets.ssdMobilenetv1.loadFromUri(FB),
+    faceapi.nets.faceLandmark68Net.loadFromUri(FB),
+    faceapi.nets.faceRecognitionNet.loadFromUri(FB)
   ]).then(function(){
-    modelsLoaded=true;
-    document.getElementById('status').textContent='✅ Ready.';
-    sendMsg({type:'MODELS_READY'});
-  }).catch(function(e){
-    document.getElementById('status').textContent='❌ Model error: '+e.message;
+    S.modelsReady = true;
+    setStatus('ok', '✅ Models ready');
+    sendToParent({ type: 'MODELS_READY' });
+  }).catch(function(e2){
+    setStatus('err', '❌ Model load failed — check internet connection');
+    toast('Model load failed: '+e2.message, 'err');
   });
 });
 
-function startCam(){
-  if(stream){ stream.getTracks().forEach(function(t){t.stop();}); }
-  navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false})
-  .then(function(s){
-    stream=s;
-    document.getElementById('vid').srcObject=s;
-    document.getElementById('msg').style.display='none';
-    document.getElementById('btnV').disabled=false;
-    document.getElementById('status').textContent='✅ Camera ready. Click '+(MODE==='register'?'Capture Face':'Verify Face')+'.';
-  }).catch(function(e){
-    document.getElementById('status').textContent='❌ Camera error: '+e.message;
-  });
+// ── Receive employees from parent ──────────────────────────
+window.addEventListener('message', function(ev){
+  if (!ev.data || !ev.data.type) return;
+
+  if (ev.data.type === 'LOAD_EMPLOYEES') {
+    S.employees = ev.data.employees || [];
+    setStatus('ok', '✅ Ready · ' + S.employees.length + ' employees loaded');
+    toast(S.employees.length + ' employees loaded', 'ok');
+  }
+
+  // Also accept direct GAS employee payload
+  if (ev.data.type === 'EMPLOYEES') {
+    S.employees = ev.data.data || [];
+    setStatus('ok', '✅ Ready · ' + S.employees.length + ' employees loaded');
+  }
+
+  // Registration mode: parent sends employee list for matching check
+  if (ev.data.type === 'EMPLOYEES_FOR_REG') {
+    S.employees = ev.data.employees || [];
+  }
+});
+
+// ── GPS ────────────────────────────────────────────────────
+if (navigator.geolocation) {
+  S.gpsWatchId = navigator.geolocation.watchPosition(function(pos){
+    S.gps = {
+      lat: pos.coords.latitude,
+      lng: pos.coords.longitude,
+      accuracy: pos.coords.accuracy,
+      speed: pos.coords.speed
+    };
+    document.getElementById('gpsDot').className = 'gps-dot acquired';
+    document.getElementById('gpsText').textContent =
+      'GPS: ' + S.gps.lat.toFixed(5) + ', ' + S.gps.lng.toFixed(5) +
+      ' (±' + Math.round(S.gps.accuracy) + 'm)';
+    document.getElementById('hudGPS').textContent =
+      '📍 ' + S.gps.lat.toFixed(4) + ', ' + S.gps.lng.toFixed(4);
+    // Reverse geocode for HUD (fire and forget)
+    fetch('https://nominatim.openstreetmap.org/reverse?lat='+S.gps.lat+'&lon='+S.gps.lng+'&format=json')
+      .then(function(r){return r.json();})
+      .then(function(d){
+        if (d.display_name) {
+          var parts = d.display_name.split(',');
+          document.getElementById('hudGPS').textContent = '📍 ' + parts.slice(0,2).join(',').trim();
+          if (S.gps) S.gps.address = parts.slice(0,3).join(', ');
+        }
+      }).catch(function(){});
+  }, function(err){
+    document.getElementById('gpsText').textContent = 'GPS: ' + err.message;
+  }, { enableHighAccuracy: true, maximumAge: 3000, timeout: 12000 });
 }
 
-function doAction(){
-  if(!modelsLoaded){document.getElementById('status').textContent='⏳ Models still loading...';return;}
-  if(!stream){document.getElementById('status').textContent='Start camera first';return;}
-  if(MODE==='register') doCapture();
-  else doVerify();
+// ── Network / IP ───────────────────────────────────────────
+var conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+if (conn) {
+  S.net = (conn.effectiveType || conn.type || '').toUpperCase();
+  conn.addEventListener('change', function(){ S.net = (conn.effectiveType||conn.type||'').toUpperCase(); });
 }
+fetch('https://api.ipify.org?format=json').then(function(r){return r.json();}).then(function(d){ S.ip = d.ip || ''; }).catch(function(){});
 
-function detect(vid){
-  // Try tiny detector first (faster), fall back to ssd
-  var opts=new faceapi.TinyFaceDetectorOptions({inputSize:224,scoreThreshold:0.4});
-  return faceapi.detectSingleFace(vid,opts).withFaceLandmarks(true).withFaceDescriptor()
-  .then(function(det){
-    if(det) return det;
-    return faceapi.detectSingleFace(vid,new faceapi.SsdMobilenetv1Options({minConfidence:0.4}))
-      .withFaceLandmarks().withFaceDescriptor();
-  });
-}
-
-function doCapture(){
-  var statusEl=document.getElementById('status');
-  statusEl.innerHTML='<span class="loader"></span>Extracting face...';
-  var vid=document.getElementById('vid');
-  detect(vid).then(function(det){
-    if(!det){statusEl.textContent='⚠️ No face detected. Try again.';return;}
-    var cvs=document.createElement('canvas');
-    cvs.width=vid.videoWidth;cvs.height=vid.videoHeight;
-    cvs.getContext('2d').drawImage(vid,0,0);
-    var pic=cvs.toDataURL('image/jpeg',0.85);
-    var score=Math.round(det.detection.score*100);
-    statusEl.textContent='✅ Face captured! Quality: '+score+'%';
-    sendMsg({type:'FACE_CAPTURED',descriptor:Array.from(det.descriptor),photoB64:pic,quality:score});
-    setTimeout(function(){window.close();},1500);
-  }).catch(function(e){statusEl.textContent='❌ Error: '+e.message;});
-}
-
-function doVerify(){
-  var statusEl=document.getElementById('status');
-  statusEl.innerHTML='<span class="loader"></span>Scanning...';
-  var vid=document.getElementById('vid');
-  detect(vid).then(function(det){
-    if(!det){statusEl.textContent='⚠️ No face detected. Try again.';return;}
-    var cvs=document.createElement('canvas');
-    cvs.width=vid.videoWidth;cvs.height=vid.videoHeight;
-    cvs.getContext('2d').drawImage(vid,0,0);
-    capturedB64=cvs.toDataURL('image/jpeg',0.75);
-    var best=null,bestD=Infinity;
-    employees.forEach(function(emp){
-      if(!emp.faceDescriptor)return;
-      var arr=Array.isArray(emp.faceDescriptor)?emp.faceDescriptor:Object.values(emp.faceDescriptor);
-      var d=faceapi.euclideanDistance(det.descriptor,new Float32Array(arr));
-      if(d<bestD){bestD=d;best=emp;}
-    });
-    var res=document.getElementById('result');
-    if(best&&bestD<0.55){
-      verified=best;
-      var score=Math.round((1-bestD)*100);
-      document.getElementById('rname').textContent=best.fullName;
-      document.getElementById('rsub').textContent=best.department+' · '+best.employeeId+' · Match: '+score+'%';
-      document.getElementById('rbtns').innerHTML=
-        '<button class="bin" onclick="sendRecord(\'time_in\')">▶ TIME IN</button>'+
-        '<button class="bout" onclick="sendRecord(\'time_out\')">◀ TIME OUT</button>';
-      document.getElementById('rfail').style.display='none';
-      res.className='result ok';res.style.display='block';
-      statusEl.textContent='✅ Matched: '+best.fullName;
-    }else{
-      verified=null;
-      document.getElementById('rname').textContent='Not Recognized';
-      document.getElementById('rsub').textContent='';
-      document.getElementById('rbtns').innerHTML='';
-      document.getElementById('rfail').textContent='Face does not match any registered employee.';
-      document.getElementById('rfail').style.display='block';
-      res.className='result fail';res.style.display='block';
-      statusEl.textContent='❌ Not recognized. Try again.';
-    }
-  }).catch(function(e){statusEl.textContent='❌ Error: '+e.message;});
-}
-
-function sendRecord(type){
-  if(!verified)return;
-  sendMsg({type:'ATTENDANCE_RECORD',recordType:type,employee:verified,photoB64:capturedB64});
-  document.getElementById('status').textContent='📤 Sending...';
-  document.getElementById('result').style.display='none';
-  setTimeout(function(){window.close();},1500);
-}
-
-// Auto-start camera after models load for speed
-var _autoStart=setInterval(function(){
-  if(modelsLoaded&&!stream){
-    clearInterval(_autoStart);
+// ── Camera ─────────────────────────────────────────────────
+function toggleCam() {
+  if (S.stream) {
+    stopCam();
+  } else {
     startCam();
   }
-},500);
+}
+
+function startCam() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    toast('Camera API not available in this browser', 'err');
+    return;
+  }
+  navigator.mediaDevices.getUserMedia({
+    video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+    audio: false
+  }).then(function(stream){
+    S.stream = stream;
+    var vid = document.getElementById('vid');
+    vid.srcObject = stream;
+    document.getElementById('camMsg').style.display = 'none';
+    document.getElementById('scanLine').style.display = '';
+    document.getElementById('hudRec').style.display = '';
+    document.getElementById('lightBar').style.display = '';
+    document.getElementById('btnCam').textContent = '⏹ Stop Camera';
+    document.getElementById('btnCam').className = 'btn-cam active';
+    document.getElementById('btnVerify').disabled = false;
+    toast('Camera started', 'ok');
+    startDetectLoop();
+  }).catch(function(e){
+    if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
+      toast('Camera permission denied — allow camera in browser settings', 'err');
+      setStatus('err', '❌ Camera blocked — allow camera access in your browser');
+      showTips();
+    } else if (e.name === 'NotFoundError') {
+      toast('No camera device found', 'err');
+    } else {
+      toast('Camera error: ' + e.message, 'err');
+    }
+  });
+}
+
+function stopCam() {
+  if (S.stream) {
+    S.stream.getTracks().forEach(function(t){ t.stop(); });
+    S.stream = null;
+  }
+  stopDetectLoop();
+  document.getElementById('vid').srcObject = null;
+  document.getElementById('camMsg').style.display = '';
+  document.getElementById('scanLine').style.display = 'none';
+  document.getElementById('hudRec').style.display = 'none';
+  document.getElementById('lightBar').style.display = 'none';
+  document.getElementById('btnCam').textContent = '📷 Start Camera';
+  document.getElementById('btnCam').className = 'btn-cam';
+  document.getElementById('btnVerify').disabled = true;
+}
+
+// ── Continuous detection loop (lightweight — no recognition, just detection) ──
+function startDetectLoop() {
+  if (!S.modelsReady) return;
+  var vid = document.getElementById('vid');
+  var cvs = document.getElementById('overlay');
+  var ctx = cvs.getContext('2d');
+
+  function loop() {
+    S.detectLoop = requestAnimationFrame(loop);
+    if (!S.stream || S.detecting) return;
+    if (!vid.videoWidth) return;
+
+    cvs.width = vid.videoWidth;
+    cvs.height = vid.videoHeight;
+
+    // Lighting analysis
+    measureLighting(vid);
+
+    // Quick face count (no landmarks/descriptor — fast)
+    faceapi.detectAllFaces(vid, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.4, maxResults: 5 }))
+      .then(function(dets){
+        ctx.clearRect(0, 0, cvs.width, cvs.height);
+        document.getElementById('hudFaces').textContent = dets.length + (dets.length===1?' face':' faces');
+        dets.forEach(function(d){
+          var b = d.box;
+          // Draw box
+          ctx.strokeStyle = dets.length === 1 ? 'rgba(16,185,129,0.7)' : 'rgba(245,158,11,0.7)';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(b.x, b.y, b.width, b.height);
+          // Corner accents
+          var cs = 12;
+          ctx.strokeStyle = '#10b981';
+          ctx.lineWidth = 2.5;
+          [[b.x,b.y],[b.x+b.width,b.y],[b.x,b.y+b.height],[b.x+b.width,b.y+b.height]].forEach(function(pt,i){
+            ctx.beginPath();
+            ctx.moveTo(pt[0] + (i%2===0?0:-(cs)), pt[1]);
+            ctx.lineTo(pt[0] + (i%2===0?cs:0), pt[1]);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(pt[0], pt[1] + (i<2?0:-(cs)));
+            ctx.lineTo(pt[0], pt[1] + (i<2?cs:0));
+            ctx.stroke();
+          });
+        });
+      }).catch(function(){});
+  }
+  S.detectLoop = requestAnimationFrame(loop);
+}
+
+function stopDetectLoop() {
+  if (S.detectLoop) { cancelAnimationFrame(S.detectLoop); S.detectLoop = null; }
+}
+
+// ── Lighting meter ─────────────────────────────────────────
+var _lightCanvas = document.createElement('canvas');
+var _lightCtx = _lightCanvas.getContext('2d');
+function measureLighting(vid) {
+  try {
+    _lightCanvas.width = 32; _lightCanvas.height = 24;
+    _lightCtx.drawImage(vid, 0, 0, 32, 24);
+    var data = _lightCtx.getImageData(0, 0, 32, 24).data;
+    var sum = 0;
+    for (var i = 0; i < data.length; i += 4) {
+      sum += 0.299*data[i] + 0.587*data[i+1] + 0.114*data[i+2];
+    }
+    var avg = sum / (32*24);
+    var pct = Math.round((avg/255)*100);
+    var fill = document.getElementById('lbFill');
+    fill.style.width = pct + '%';
+    fill.style.background = pct < 25 ? '#ef4444' : pct < 50 ? '#f59e0b' : '#10b981';
+    document.getElementById('lbLabel').textContent = pct + '%';
+    if (pct < 25 && S.stream) {
+      document.getElementById('gpsText').style.color = '#f59e0b';
+    }
+  } catch(e) {}
+}
+
+// ── Verify face ────────────────────────────────────────────
+function verifyFace() {
+  if (!S.modelsReady) { toast('Models still loading, please wait', 'warn'); return; }
+  if (!S.stream) { toast('Start camera first', 'err'); return; }
+  if (!S.employees.length) {
+    toast('No employees loaded — check parent app connection', 'warn');
+    setStatus('warn', '⚠ No employee data — ensure you are opened from the main app');
+    return;
+  }
+
+  var vid = document.getElementById('vid');
+  if (!vid.videoWidth || vid.readyState < 2) {
+    toast('Camera not ready yet, wait a moment', 'warn');
+    return;
+  }
+
+  S.detecting = true;
+  setStatus('loading', '🔍 Scanning face…');
+  document.getElementById('btnVerify').disabled = true;
+
+  // Capture snapshot first
+  var snapCanvas = document.createElement('canvas');
+  snapCanvas.width = vid.videoWidth;
+  snapCanvas.height = vid.videoHeight;
+  var sc = snapCanvas.getContext('2d');
+  sc.translate(snapCanvas.width, 0); // mirror to match display
+  sc.scale(-1, 1);
+  sc.drawImage(vid, 0, 0);
+  S.capturedB64 = snapCanvas.toDataURL('image/jpeg', 0.80);
+
+  // Detect with full pipeline
+  faceapi.detectSingleFace(vid, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.45 }))
+    .withFaceLandmarks()
+    .withFaceDescriptor()
+    .then(function(det){
+      S.detecting = false;
+      document.getElementById('btnVerify').disabled = false;
+
+      if (!det) {
+        setStatus('warn', '⚠ No face detected — center your face in the ring');
+        toast('No face detected', 'warn');
+        showResult(null, null, false, 'No face detected. Ensure your face is centered, well-lit, and not obscured.');
+        showTips();
+        return;
+      }
+
+      // Match against all registered employees
+      var best = null, bestDist = Infinity;
+      S.employees.forEach(function(emp){
+        if (!emp.faceDescriptor) return;
+        var arr;
+        if (Array.isArray(emp.faceDescriptor)) {
+          arr = emp.faceDescriptor;
+        } else if (typeof emp.faceDescriptor === 'object') {
+          arr = Object.values(emp.faceDescriptor);
+        } else {
+          try { arr = JSON.parse(emp.faceDescriptor); } catch(e){ return; }
+        }
+        if (!arr || arr.length < 128) return; // invalid descriptor
+        var dist = faceapi.euclideanDistance(det.descriptor, new Float32Array(arr));
+        if (dist < bestDist) { bestDist = dist; best = emp; }
+      });
+
+      var score = Math.round((1 - bestDist) * 100);
+      var matched = best && bestDist < S.threshold;
+
+      if (matched) {
+        S.verified = best;
+        setStatus('ok', '✅ Verified: ' + best.fullName + ' (' + score + '% match)');
+        toast('Matched: ' + best.fullName, 'ok');
+        showResult(best, score, true, null);
+      } else {
+        S.verified = null;
+        var hint = best
+          ? 'Closest match: ' + best.fullName + ' at ' + score + '% (threshold: ' + Math.round((1-S.threshold)*100) + '%). Try moving the Sensitivity slider right, or improve lighting.'
+          : 'No registered employee matched. Register this face first.';
+        setStatus('err', '❌ Face not recognized');
+        toast('Not recognized', 'err');
+        showResult(null, score, false, hint);
+        showTips();
+      }
+    })
+    .catch(function(e){
+      S.detecting = false;
+      document.getElementById('btnVerify').disabled = false;
+      setStatus('err', '❌ Detection error: ' + e.message);
+      toast('Error: ' + e.message, 'err');
+    });
+}
+
+function showResult(emp, score, ok, errMsg) {
+  var res = document.getElementById('result');
+  var av = document.getElementById('resAv');
+  var errEl = document.getElementById('resErr');
+
+  res.className = 'result ' + (ok ? 'ok' : 'fail');
+  res.style.display = 'block';
+  errEl.style.display = 'none';
+
+  if (ok && emp) {
+    av.innerHTML = emp.photoUrl
+      ? '<img src="' + emp.photoUrl + '" alt="">'
+      : emp.fullName.split(' ').map(function(n){return n[0]||'';}).join('').substring(0,2).toUpperCase();
+    av.style.borderColor = 'rgba(16,185,129,.5)';
+    document.getElementById('resName').textContent = emp.fullName;
+    document.getElementById('resSub').textContent = (emp.department||'') + ' · ' + emp.employeeId;
+    document.getElementById('resScore').textContent = 'Face match: ' + score + '%  |  dist: ' + (1 - score/100).toFixed(3);
+    document.getElementById('resBtns').style.display = 'flex';
+  } else {
+    av.innerHTML = '✗';
+    av.style.borderColor = 'rgba(239,68,68,.4)';
+    document.getElementById('resName').textContent = 'Not Recognized';
+    document.getElementById('resSub').textContent = score ? 'Best match score: ' + score + '%' : '';
+    document.getElementById('resScore').textContent = '';
+    document.getElementById('resBtns').style.display = 'none';
+    if (errMsg) {
+      errEl.textContent = errMsg;
+      errEl.style.display = 'block';
+    }
+  }
+}
+
+// ── Record attendance ──────────────────────────────────────
+function record(type) {
+  if (!S.verified) return;
+  document.getElementById('btnIn').disabled = true;
+  document.getElementById('btnOut').disabled = true;
+  setStatus('loading', (type === 'time_in' ? '⏳ Recording Time In…' : '⏳ Recording Time Out…'));
+
+  var ua = navigator.userAgent;
+  var dev = 'Desktop';
+  if (/iPhone/.test(ua)) dev = 'iPhone';
+  else if (/iPad/.test(ua)) dev = 'iPad';
+  else if (/Android/.test(ua)) { var m = ua.match(/Android.*?; ([^)]+)/); dev = m ? m[1] : 'Android'; }
+
+  var payload = {
+    type: 'ATTENDANCE_RECORD',
+    recordType: type,
+    employee: S.verified,
+    photoB64: S.capturedB64 || null,
+    gps: S.gps,
+    ip: S.ip,
+    net: S.net,
+    device: dev,
+    userAgent: ua.substring(0, 200)
+  };
+
+  // Send to parent window
+  sendToParent(payload);
+
+  // Give parent time to respond; if it does, we'll show success
+  // Also set a timeout fallback
+  setTimeout(function(){
+    setStatus('ok', '✅ Record sent to parent app');
+    toast((type==='time_in'?'Time In':'Time Out') + ' sent!', 'ok');
+    document.getElementById('result').style.display = 'none';
+    document.getElementById('btnIn').disabled = false;
+    document.getElementById('btnOut').disabled = false;
+    S.verified = null; S.capturedB64 = null;
+  }, 800);
+}
+
+// ── Parent communication ───────────────────────────────────
+function sendToParent(msg) {
+  if (window.opener) {
+    try { window.opener.postMessage(msg, '*'); } catch(e){}
+  }
+  if (window.parent && window.parent !== window) {
+    try { window.parent.postMessage(msg, '*'); } catch(e){}
+  }
+}
+
+// ── Threshold slider ───────────────────────────────────────
+function updateThresh(val) {
+  S.threshold = parseFloat(val);
+  document.getElementById('threshVal').textContent = parseFloat(val).toFixed(2);
+}
+
+// ── UI helpers ─────────────────────────────────────────────
+function setStatus(type, msg) {
+  var el = document.getElementById('statusBar');
+  el.className = type;
+  el.textContent = msg;
+}
+
+function showTips() {
+  document.getElementById('tips').classList.add('show');
+}
+
+function toast(msg, type) {
+  type = type || 'info';
+  var icons = { ok:'✅', err:'❌', warn:'⚠', info:'ℹ' };
+  var t = document.createElement('div');
+  t.className = 'toast ' + type;
+  t.innerHTML = '<span>' + (icons[type]||'') + '</span><span>' + msg + '</span>';
+  document.getElementById('toastStack').appendChild(t);
+  setTimeout(function(){
+    t.style.transition = 'opacity .3s';
+    t.style.opacity = '0';
+    setTimeout(function(){ t.remove(); }, 300);
+  }, 3500);
+}
 </script>
 </body>
 </html>
